@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
-from sklearn.datasets import load_breast_cancer
+
+np.random.seed(2)
 
 class NN:
     '''
@@ -18,7 +19,7 @@ class NN:
     targets = None # The expected outputs
     alpha = 0 # The learning rate
     epoch = 0 # Number of epochs to perform on the data
-
+    threshold = 0.8 # Minimum confidence to predict as positive
     def __init__(self, layers, learning_rate = 0.01, epochs = 100):
         '''
         Initializes the neural network parameters
@@ -44,7 +45,7 @@ class NN:
             self.weights.append(np.random.randn(layers[i], layers[i + 1]))
             self.biases.append(np.zeros((1, layers[i + 1])))
 
-    def train(self, verbose = False, plot_costs = True):
+    def train(self, verbose = False, plot_costs = False):
         '''
         Train the neural network with the loaded data.
 
@@ -60,18 +61,16 @@ class NN:
 
         '''
         costs = []
-
         for i in range(self.epoch):
-            cost = self.forward()
+            self.forward()
+            cost = self.cost()
             costs.append(cost)
-            if(i %100 == 0 and verbose):
-                print('Iteration: %d\tCost: %f'%(i, cost))
+            if((i-1) %100 == 0 and verbose):
+                print('Iteration: %d\tCost: %f\tAccuracy: %f'%(i- 1, cost, self.train_accuracy()))
             self.backward()
-
         if plot_costs:
             plt.plot(costs)
             plt.show()
-
 
     def load_data(self, X, y):
         '''
@@ -90,7 +89,7 @@ class NN:
         self.targets = y
 
     @staticmethod
-    def activation(z):
+    def activation(z, type = 'sigmoid'):
         '''
         The activation function for the neural network (sigmoid).
 
@@ -103,6 +102,8 @@ class NN:
         Raises:
             None
         '''
+        if type == 'relu':
+            return z * (z > 0)
         return 1/(1 + np.exp(-z))
 
     @staticmethod
@@ -122,25 +123,28 @@ class NN:
         out = NN.activation(z)
         return out*(1 - out)
 
-    def forward(self):
+    def forward(self, X = 'auto'):
         '''
         Perform a forward pass on the neural network to calculate all the activations.
 
         Args:
-            None
+            X: The input array on which to perform a forward pass.
 
         Returns:
-            The cost of training.
+            The activations of the output layer.
 
         Raises:
             None
         '''
         self.z = [] # Clear the previous values
-        self.a = [self.a[0]] # Retain only the input from the previously calculated activations
+        if str(X) == 'auto':
+            self.a = [self.a[0]] # Retain only the input from the previously calculated activations
+        else:
+            self.a = [X]
         for i in range(self.layer_count - 1):
             self.z.append(self.a[-1].dot(self.weights[i]) + self.biases[i])
             self.a.append(self.activation(self.z[-1]))
-        return self.cost()
+        return self.a[-1]
 
     def backward(self):
         '''
@@ -182,6 +186,19 @@ class NN:
             self.weights[i] = self.weights[i] + self.alpha * self.delta_weights[i]
             self.biases[i] = self.biases[i] + self.alpha * self.delta_biases[i]
 
+    def train_accuracy(self):
+        predictions = self.a[-1] > self.threshold
+        accuracy = np.mean(predictions == self.targets)
+        return accuracy
+
+    def predict(self, X):
+        predictions = self.forward(X) > self.threshold
+        return predictions
+
+    @staticmethod
+    def accuracy(predictions, targets):
+        return np.mean(predictions == targets)
+
     def cost(self, epsilon=1e-12):
         """
         Computes the cost between targets predictions. Need to encode the targets as one hot vectors.
@@ -197,18 +214,3 @@ class NN:
         ce = -np.sum(np.sum(self.targets*np.log(predictions + 1e-9) +
                     (1 - self.targets)*np.log(1 - predictions + 1e-9)))/N
         return ce
-
-
-if __name__ == '__main__':
-    nn = NN((3, 4, 2, 1), learning_rate = 0.5, epochs = 10000)
-    X = np.array(([0, 0, 0],
-            [0, 0, 1],
-            [0, 1, 0],
-            [0, 1, 1],
-            [1, 0, 0],
-            [1, 0, 1],
-            [1, 1, 0],
-            [1, 1, 1]))
-    y = np.array([[0], [1], [1], [0], [1], [0], [0], [1]])
-    nn.load_data(X, y)
-    nn.train(verbose = True, plot_costs = True)
